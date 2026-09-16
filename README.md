@@ -1,6 +1,6 @@
 # Agentic Delivery Platform
 
-Control plane POC for agentic technology delivery. The application runs on [vinext](https://github.com/cloudflare/vinext), deploys to Cloudflare Workers, and persists delivery records in Supabase Postgres.
+Persistent project foundation for TeamClaw, with the original agentic delivery POC available at `/demo`. The application runs on [vinext](https://github.com/cloudflare/vinext), deploys to Cloudflare Workers, and persists delivery records in Supabase Postgres.
 
 ## Prerequisites
 
@@ -98,7 +98,7 @@ Use SIWC for account pages, user-specific dashboards, saved records, and write a
 
 ## Supabase persistence
 
-Create a Supabase project, then fill the ignored `.env.local` already present in this checkout. For a new checkout, copy `.env.example` to `.env.local`. Set:
+Create a Supabase project, then copy `.env.example` to an ignored `.env.local` in your checkout. Set:
 
 ```text
 SUPABASE_URL=https://<project-ref>.supabase.co
@@ -127,3 +127,11 @@ The portable build runs Vinext directly without a host `timeout` command. The ma
 
 - [vinext Documentation](https://github.com/cloudflare/vinext)
 - [Supabase JavaScript Documentation](https://supabase.com/docs/reference/javascript/introduction)
+
+## TeamClaw project foundation
+
+See [implementation status](docs/implementation-status.md) for the implemented slice, migration/rollout instructions, API contracts, validation and remaining work. The [evolution specification](TEAMCLAW_EVOLUTION_SPEC.md) describes the full target; it is not a list of already working capabilities.
+
+The home page now requires ChatGPT identity and shows only owned/shared projects. Each demand creates a durable queued run. CLI workers and automatic quota resumption are planned next. Apply `20260916220000_project_foundation.sql` before deploying this version. Existing ownerless deliveries are preserved but hidden from the project API until ownership is explicitly established.
+
+`npm test` includes disposable PostgreSQL migration/authorization tests using PGlite; it does not connect to production or require Supabase credentials.
