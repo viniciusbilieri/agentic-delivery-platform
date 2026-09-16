@@ -1,6 +1,6 @@
-# vinext-starter
+# Agentic Delivery Platform
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+Control plane POC for agentic technology delivery. The application runs on [vinext](https://github.com/cloudflare/vinext), deploys to Cloudflare Workers, and persists delivery records in Supabase Postgres.
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ On managed Linux, use `sites-preview start` only for requested browser QA. The p
 
 The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
 
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
+The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
 
 Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
 
@@ -40,13 +40,11 @@ Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=tru
 
 - edit site code under `app/`
 - `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
+- `.openai/hosting.json` declares optional Sites R2 bindings
 - `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- `db/index.ts` creates the server-only Supabase client
+- `supabase/migrations/` contains the PostgreSQL schema history
+- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional Cloudflare bindings
 
 ## Workspace Auth Headers
 
@@ -98,23 +96,28 @@ SIWC establishes identity only; it does not prove workspace membership. Use the 
 
 Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
 
-## Local D1 migrations
+## Supabase persistence
 
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
+Create a Supabase project, then fill the ignored `.env.local` already present in this checkout. For a new checkout, copy `.env.example` to `.env.local`. Set:
 
-```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+```text
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_...
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+Both values are server-side runtime configuration. Never prefix the secret with `NEXT_PUBLIC_`, commit it, or expose it to browser code. Apply the SQL files under `supabase/migrations/` through the Supabase migration workflow before calling `/api/deliveries`. The migration keeps this application's objects in the dedicated `agentic_delivery` schema. Add that schema to the Supabase Data API's **Exposed schemas** list; only `service_role` receives database grants, while `anon` and `authenticated` remain blocked.
+
+In Cloudflare, `SUPABASE_URL` is synchronized from the versioned Worker configuration. Configure only `SUPABASE_SECRET_KEY` as an encrypted runtime secret in **Settings → Variables and Secrets**.
+
+Claude CLI and Codex CLI keep their own local authentication. A future local-agent executor should invoke the installed `claude` and `codex` commands as child processes; they will inherit this application environment without storing CLI credentials in the repository.
 
 ## Diagnostic Commands
 
 - `npm run install:ci`: perform the one locked dependency install
 - `npm run dev`: start the Vite/Vinext development server
 - `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+- `npm run start`: preview the built Worker locally with Supabase/R2 support
+- `npm test`: run the API contract tests
 
 When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
 
@@ -123,4 +126,4 @@ The portable build runs Vinext directly without a host `timeout` command. The ma
 ## Learn More
 
 - [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+- [Supabase JavaScript Documentation](https://supabase.com/docs/reference/javascript/introduction)

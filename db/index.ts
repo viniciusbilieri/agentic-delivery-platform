@@ -1,13 +1,24 @@
-import { env } from "cloudflare:workers";
-import { drizzle } from "drizzle-orm/d1";
-import * as schema from "./schema";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export function getDb() {
-  if (!env.DB) {
+let adminClient: SupabaseClient | undefined;
+
+export function getSupabaseAdmin() {
+  const url = process.env.SUPABASE_URL?.trim();
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
+
+  if (!url || !secretKey) {
     throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
+      "Supabase is unavailable. Configure SUPABASE_URL and SUPABASE_SECRET_KEY as server-side runtime variables.",
     );
   }
 
-  return drizzle(env.DB, { schema });
+  adminClient ??= createClient(url, secretKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+
+  return adminClient;
 }
