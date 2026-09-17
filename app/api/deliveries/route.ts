@@ -1,35 +1,24 @@
-import { getSupabaseAdmin } from "../../../db";
-
-export async function GET() {
-  try {
-    const { data, error } = await getSupabaseAdmin()
-      .schema("agentic_delivery")
-      .from("deliveries")
-      .select("*")
-      .order("id", { ascending: false })
-      .limit(20);
-    if (error) throw error;
-    return Response.json({ deliveries: data });
-  } catch {
-    return Response.json({ deliveries: [], error: "Delivery storage is temporarily unavailable." }, { status: 503 });
-  }
+import { actor, api, body, check, database, deliveryInput, json, membership, mutationOrigin, projectIdSchema } from "@/lib/server/control-plane";
+export const dynamic = "force-dynamic";
+export async function GET(request: Request) {
+  return api(async () => {
+    const user = await actor();
+    const projectId = projectIdSchema.parse(new URL(request.url).searchParams.get("project_id"));
+    await membership(projectId, user.userId);
+    const { data, error } = await database().from("deliveries").select("*").eq("project_id", projectId).order("id", { ascending: false }).limit(50);
+    check(error);
+    return json({ deliveries: data ?? [] });
+  });
 }
-
 export async function POST(request: Request) {
-  try {
-    const payload = (await request.json()) as { title?: string; objective?: string };
-    const title = payload.title?.trim() ?? "";
-    const objective = payload.objective?.trim() ?? "";
-    if (!title || !objective) return Response.json({ error: "title and objective are required" }, { status: 400 });
-    const { data, error } = await getSupabaseAdmin()
-      .schema("agentic_delivery")
-      .from("deliveries")
-      .insert({ code: "DT-0001", title, objective })
-      .select("*")
-      .single();
-    if (error) throw error;
-    return Response.json({ delivery: data }, { status: 201 });
-  } catch {
-    return Response.json({ error: "The delivery could not be saved." }, { status: 503 });
-  }
+  return api(async () => {
+    const user = await actor();
+    mutationOrigin(request);
+    const input = await body(request, deliveryInput);
+    await membership(input.project_id, user.userId, true);
+    // The RPC rechecks membership and atomically creates delivery/run/step/event.
+    const { data, error } = await database().rpc("create_project_delivery", { p_actor: user.userId, p_project: input.project_id, p_title: input.title, p_objective: input.objective, p_request: input.request_id });
+    check(error);
+    return json(data, 201);
+  });
 }
